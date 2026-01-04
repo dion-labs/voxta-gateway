@@ -1,0 +1,69 @@
+site_name: Voxta Gateway
+site_description: A state-mirroring gateway for the Voxta conversational AI platform, providing high-level semantic APIs for downstream applications.
+site_url: https://gateway.dionlabs.ai
+
+theme:
+  name: material
+  palette:
+    scheme: slate
+    primary: deep-purple
+    accent: cyan
+
+  font:
+    text: JetBrains Mono
+    code: JetBrains Mono
+
+  features:
+    - navigation.tabs
+    - navigation.instant
+    - navigation.sections
+    - content.code.copy
+    - toc.integrate
+
+extra_css:
+  - stylesheets/extra.css
+
+extra:
+  analytics:
+    provider: google
+    property: G-61ZYV30HGQ
+
+copyright: "© 2026 DionLabs.ai"
+
+nav:
+  - DionLabs.ai: https://dionlabs.ai
+  - Signals: https://signals.dionlabs.ai
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Building Clients: client-guide.md
+  - Development Guide: development-guide.md
+  - API Reference:
+      - Overview: api.md
+      - HTTP Endpoints: api/http.md
+      - WebSocket: api/websocket.md
+      - Events: api/events.md
+  - Changelog: changelog.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets:
+      base_path: ["."]
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - attr_list
+  - md_in_html
+
+plugins:
+  - search
+
