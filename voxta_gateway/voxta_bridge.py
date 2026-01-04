@@ -81,9 +81,10 @@ class VoxtaBridge:
                 self._setup_observers()
 
                 # Negotiate and connect
-                result = self.client.negotiate()
-                connection_token = result.get("connectionToken")
-                cookies = result.get("cookies")
+                connection_token, cookies = self.client.negotiate()
+                
+                if not connection_token:
+                    raise ConnectionError("Failed to negotiate with Voxta")
 
                 await self.client.connect(connection_token, cookies)
                 self.state.connected = True
