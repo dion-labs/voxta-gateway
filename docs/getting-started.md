@@ -82,34 +82,36 @@ Navigate to [http://localhost:8081](http://localhost:8081) in your browser to se
 
 ## Your First Client
 
-Here's a minimal Python client that listens for events:
+The `voxta-gateway` package includes a `GatewayClient` that handles all the connection complexity for you:
 
 ```python
 import asyncio
-import websockets
-import json
+from voxta_gateway import GatewayClient
 
 async def main():
-    uri = "ws://localhost:8081/ws"
+    # Create client
+    client = GatewayClient(
+        gateway_url="http://localhost:8081",
+        client_id="my-first-client",
+        events=["chat_started", "chat_closed", "dialogue_received"]
+    )
     
-    async with websockets.connect(uri) as websocket:
-        # Step 1: Subscribe to events
-        await websocket.send(json.dumps({
-            "type": "subscribe",
-            "client_id": "my-first-client",
-            "events": ["chat_started", "chat_closed", "dialogue_received"]
-        }))
-        
-        # Step 2: Receive initial state snapshot
-        response = await websocket.recv()
-        snapshot = json.loads(response)
-        print(f"Connected! Chat active: {snapshot['state']['chat_active']}")
-        
-        # Step 3: Listen for events
-        print("Listening for events... (start a chat in Voxta)")
-        async for message in websocket:
-            event = json.loads(message)
-            print(f"[{event['type']}] {event.get('data', {})}")
+    # Handle events
+    @client.on("connected")
+    async def on_connected(state):
+        print(f"Connected! Chat active: {state.get('chat_active')}")
+    
+    @client.on("chat_started")
+    async def on_chat_started(data):
+        print(f"Chat started with: {[c['name'] for c in data.get('characters', [])]}")
+    
+    @client.on("dialogue_received")
+    async def on_dialogue(data):
+        print(f"[{data.get('source')}] {data.get('text')}")
+    
+    # Run with automatic reconnection
+    print("Listening for events... (start a chat in Voxta)")
+    await client.start()
 
 if __name__ == "__main__":
     asyncio.run(main())
@@ -117,9 +119,15 @@ if __name__ == "__main__":
 
 Run it:
 ```bash
-pip install websockets
+pip install voxta-gateway
 python my_client.py
 ```
+
+The client automatically:
+- Connects and subscribes to events
+- Receives and tracks state
+- Reconnects on connection loss
+- Provides typed methods for sending dialogue, context, etc.
 
 ## Configuration Reference
 

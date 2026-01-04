@@ -50,30 +50,29 @@ The Voxta Gateway is a state-mirroring middleware that sits between the Voxta co
 
 ## Quick Example
 
-=== "Python Client"
+=== "Using GatewayClient"
 
     ```python
     import asyncio
-    import websockets
-    import json
+    from voxta_gateway import GatewayClient
 
     async def main():
-        async with websockets.connect("ws://localhost:8081/ws") as ws:
-            # Subscribe to events
-            await ws.send(json.dumps({
-                "type": "subscribe",
-                "client_id": "my-app",
-                "events": ["chat_started", "dialogue_received", "ai_state_changed"]
-            }))
-            
-            # Receive state snapshot
-            snapshot = json.loads(await ws.recv())
-            print(f"Chat active: {snapshot['state']['chat_active']}")
-            
-            # Listen for events
-            async for message in ws:
-                event = json.loads(message)
-                print(f"Event: {event['type']}")
+        client = GatewayClient(
+            gateway_url="http://localhost:8081",
+            client_id="my-app",
+            events=["chat_started", "dialogue_received", "ai_state_changed"]
+        )
+        
+        @client.on("dialogue_received")
+        async def on_dialogue(data):
+            print(f"[{data.get('source')}] {data.get('text')}")
+        
+        @client.on("chat_started")
+        async def on_chat_started(data):
+            print("Chat started! Ready to send messages.")
+            await client.send_dialogue("Hello from my app!")
+        
+        await client.start()
 
     asyncio.run(main())
     ```
