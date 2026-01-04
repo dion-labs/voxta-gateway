@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voxta Gateway Debug</title>
+    <style>
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #21262d;
+            --border-color: #30363d;
+            --text-primary: #c9d1d9;
+            --text-secondary: #8b949e;
+            --text-muted: #6e7681;
+            --accent-green: #3fb950;
+            --accent-red: #f85149;
+            --accent-yellow: #d29922;
+            --accent-blue: #58a6ff;
+            --accent-purple: #a371f7;
+            --font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.5;
+            min-height: 100vh;
+        }
+
+        .header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .header h1 {
+            font-size: 20px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .status-indicator.connected {
+            background: var(--accent-green);
+            box-shadow: 0 0 8px var(--accent-green);
+        }
+
+        .status-indicator.disconnected {
+            background: var(--accent-red);
+            box-shadow: 0 0 8px var(--accent-red);
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            height: calc(100vh - 61px);
+        }
+
+        .sidebar {
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border-color);
+            overflow-y: auto;
+        }
+
+        .section {
+            padding: 16px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .section-title {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+        }
+
+        .state-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 0;
+            font-size: 13px;
+        }
+
+        .state-label {
+            color: var(--text-secondary);
+        }
+
+        .state-value {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--text-primary);
+        }
+
+        .state-value.idle { color: var(--accent-green); }
+        .state-value.thinking { color: var(--accent-yellow); }
+        .state-value.speaking { color: var(--accent-blue); }
+        .state-value.true { color: var(--accent-green); }
+        .state-value.false { color: var(--text-muted); }
+
+        .client-item {
+            background: var(--bg-tertiary);
+            border-radius: 6px;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            border: 1px solid transparent;
+        }
+
+        .client-item:hover {
+            border-color: var(--border-color);
+        }
+
+        .client-item.selected {
+            border-color: var(--accent-blue);
+            background: rgba(88, 166, 255, 0.1);
+        }
+
+        .client-name {
+            font-weight: 500;
+            font-size: 13px;
+            margin-bottom: 4px;
+        }
+
+        .client-events {
+            font-size: 11px;
+            color: var(--text-muted);
+            font-family: var(--font-mono);
+        }
+
+        .content-area {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .content-header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            padding: 12px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .content-header h2 {
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .tab-bar {
+            display: flex;
+            gap: 4px;
+        }
+
+        .tab {
+            padding: 6px 12px;
+            font-size: 12px;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.15s ease;
+        }
+
+        .tab:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        .tab.active {
+            background: var(--accent-blue);
+            color: white;
+        }
+
+        .log-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px;
+            font-family: var(--font-mono);
+            font-size: 12px;
+        }
+
+        .log-entry {
+            display: flex;
+            padding: 4px 8px;
+            border-radius: 4px;
+            margin-bottom: 2px;
+        }
+
+        .log-entry:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .log-time {
+            color: var(--text-muted);
+            width: 80px;
+            flex-shrink: 0;
+        }
+
+        .log-direction {
+            width: 40px;
+            flex-shrink: 0;
+            font-weight: 600;
+        }
+
+        .log-direction.in {
+            color: var(--accent-green);
+        }
+
+        .log-direction.out {
+            color: var(--accent-purple);
+        }
+
+        .log-type {
+            color: var(--accent-blue);
+            width: 200px;
+            flex-shrink: 0;
+        }
+
+        .log-data {
+            color: var(--text-secondary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .empty-state svg {
+            width: 48px;
+            height: 48px;
+            margin-bottom: 12px;
+            opacity: 0.5;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .badge.idle { background: rgba(63, 185, 80, 0.2); color: var(--accent-green); }
+        .badge.thinking { background: rgba(210, 153, 34, 0.2); color: var(--accent-yellow); }
+        .badge.speaking { background: rgba(88, 166, 255, 0.2); color: var(--accent-blue); }
+
+        .refresh-btn {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .refresh-btn:hover {
+            background: var(--border-color);
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .loading {
+            animation: pulse 1.5s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>
+            <span id="connectionStatus" class="status-indicator disconnected"></span>
+            Voxta Gateway Debug
+        </h1>
+    </div>
+
+    <div class="main-grid">
+        <div class="sidebar">
+            <div class="section">
+                <div class="section-title">Gateway State</div>
+                <div class="state-row">
+                    <span class="state-label">Voxta</span>
+                    <span id="voxtaStatus" class="state-value false">disconnected</span>
+                </div>
+                <div class="state-row">
+                    <span class="state-label">Session</span>
+                    <span id="sessionId" class="state-value">—</span>
+                </div>
+                <div class="state-row">
+                    <span class="state-label">AI State</span>
+                    <span id="aiState" class="state-value idle">idle</span>
+                </div>
+                <div class="state-row">
+                    <span class="state-label">External Speaker</span>
+                    <span id="extSpeaker" class="state-value false">inactive</span>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">Connected Clients</div>
+                <div id="clientList">
+                    <div class="empty-state" style="padding: 20px;">
+                        <div style="color: var(--text-muted); font-size: 13px;">No clients connected</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">Characters</div>
+                <div id="characterList">
+                    <div style="color: var(--text-muted); font-size: 13px;">No characters loaded</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="content-area">
+            <div class="content-header">
+                <h2 id="contentTitle">Raw Voxta Stream</h2>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <div class="tab-bar">
+                        <button class="tab active" data-view="voxta">Voxta Traffic</button>
+                        <button class="tab" data-view="client">Client Traffic</button>
+                    </div>
+                    <button class="refresh-btn" onclick="refreshData()">Refresh</button>
+                </div>
+            </div>
+            <div id="logContainer" class="log-container">
+                <div class="empty-state">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <div>Waiting for events...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let selectedClient = null;
+        let currentView = 'voxta';
+        let voxtaHistory = [];
+        let clientsData = {};
+
+        // WebSocket connection
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+
+            ws.onopen = () => {
+                document.getElementById('connectionStatus').className = 'status-indicator connected';
+                // Subscribe to all events for debugging
+                ws.send(JSON.stringify({
+                    type: 'subscribe',
+                    client_id: 'debug-ui-' + Date.now(),
+                    events: ['all']
+                }));
+            };
+
+            ws.onclose = () => {
+                document.getElementById('connectionStatus').className = 'status-indicator disconnected';
+                setTimeout(connectWebSocket, 3000);
+            };
+
+            ws.onmessage = (event) => {
+                const msg = JSON.parse(event.data);
+                handleMessage(msg);
+            };
+        }
+
+        function handleMessage(msg) {
+            if (msg.type === 'snapshot') {
+                updateState(msg.state);
+            } else if (msg.type === 'ai_state_changed') {
+                document.getElementById('aiState').textContent = msg.data.new_state;
+                document.getElementById('aiState').className = `state-value ${msg.data.new_state}`;
+            } else if (msg.type === 'external_speaker_started') {
+                document.getElementById('extSpeaker').textContent = msg.data.source;
+                document.getElementById('extSpeaker').className = 'state-value true';
+            } else if (msg.type === 'external_speaker_stopped') {
+                document.getElementById('extSpeaker').textContent = 'inactive';
+                document.getElementById('extSpeaker').className = 'state-value false';
+            } else if (msg.type === 'voxta_connected') {
+                document.getElementById('voxtaStatus').textContent = 'connected';
+                document.getElementById('voxtaStatus').className = 'state-value true';
+            } else if (msg.type === 'voxta_disconnected') {
+                document.getElementById('voxtaStatus').textContent = 'disconnected';
+                document.getElementById('voxtaStatus').className = 'state-value false';
+            } else if (msg.type === 'characters_updated') {
+                updateCharacters(msg.data.characters);
+            }
+
+            // Add to visual log if we're showing real-time
+            if (currentView === 'voxta') {
+                addLogEntry({
+                    direction: 'IN',
+                    type: msg.type,
+                    data: msg.data,
+                    timestamp: msg.timestamp || Date.now() / 1000
+                });
+            }
+        }
+
+        function updateState(state) {
+            document.getElementById('voxtaStatus').textContent = state.connected ? 'connected' : 'disconnected';
+            document.getElementById('voxtaStatus').className = `state-value ${state.connected}`;
+            document.getElementById('sessionId').textContent = state.session_id || '—';
+            document.getElementById('aiState').textContent = state.ai_state;
+            document.getElementById('aiState').className = `state-value ${state.ai_state}`;
+            document.getElementById('extSpeaker').textContent = state.external_speaker_active ? state.external_speaker_source : 'inactive';
+            document.getElementById('extSpeaker').className = `state-value ${state.external_speaker_active}`;
+
+            if (state.characters) {
+                updateCharacters(state.characters);
+            }
+        }
+
+        function updateCharacters(characters) {
+            const container = document.getElementById('characterList');
+            if (!characters || characters.length === 0) {
+                container.innerHTML = '<div style="color: var(--text-muted); font-size: 13px;">No characters loaded</div>';
+                return;
+            }
+
+            container.innerHTML = characters.map(c => `
+                <div style="padding: 4px 0; font-size: 13px;">
+                    <div style="font-weight: 500;">${c.name}</div>
+                    <div style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono);">${c.id.substring(0, 8)}...</div>
+                </div>
+            `).join('');
+        }
+
+        async function fetchClients() {
+            try {
+                const resp = await fetch('/debug/clients');
+                clientsData = await resp.json();
+                renderClients();
+            } catch (e) {
+                console.error('Failed to fetch clients:', e);
+            }
+        }
+
+        function renderClients() {
+            const container = document.getElementById('clientList');
+            const clients = Object.entries(clientsData);
+
+            if (clients.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state" style="padding: 20px;">
+                        <div style="color: var(--text-muted); font-size: 13px;">No clients connected</div>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = clients.map(([id, data]) => `
+                <div class="client-item ${selectedClient === id ? 'selected' : ''}" onclick="selectClient('${id}')">
+                    <div class="client-name">${id}</div>
+                    <div class="client-events">${data.subscribed_events.join(', ')}</div>
+                </div>
+            `).join('');
+        }
+
+        async function selectClient(clientId) {
+            selectedClient = clientId;
+            currentView = 'client';
+            renderClients();
+            updateTabs();
+            document.getElementById('contentTitle').textContent = `Client: ${clientId}`;
+
+            try {
+                const resp = await fetch(`/debug/clients/${clientId}/history`);
+                const history = await resp.json();
+                renderLog(history.map(h => ({...h, direction: 'OUT'})));
+            } catch (e) {
+                console.error('Failed to fetch client history:', e);
+            }
+        }
+
+        async function fetchVoxtaHistory() {
+            try {
+                const resp = await fetch('/debug/voxta/history');
+                voxtaHistory = await resp.json();
+                if (currentView === 'voxta') {
+                    renderLog(voxtaHistory);
+                }
+            } catch (e) {
+                console.error('Failed to fetch Voxta history:', e);
+            }
+        }
+
+        function renderLog(entries) {
+            const container = document.getElementById('logContainer');
+
+            if (!entries || entries.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <div>No events recorded</div>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = entries.slice(-100).reverse().map(entry => {
+                const time = new Date(entry.timestamp * 1000).toLocaleTimeString();
+                const direction = entry.direction || 'IN';
+                const type = entry.type || '?';
+                const data = entry.data ? JSON.stringify(entry.data).substring(0, 100) : '';
+
+                return `
+                    <div class="log-entry">
+                        <span class="log-time">${time}</span>
+                        <span class="log-direction ${direction.toLowerCase()}">${direction}</span>
+                        <span class="log-type">${type}</span>
+                        <span class="log-data">${data}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function addLogEntry(entry) {
+            const container = document.getElementById('logContainer');
+            const isEmpty = container.querySelector('.empty-state');
+            if (isEmpty) {
+                container.innerHTML = '';
+            }
+
+            const time = new Date(entry.timestamp * 1000).toLocaleTimeString();
+            const direction = entry.direction || 'IN';
+            const type = entry.type || '?';
+            const data = entry.data ? JSON.stringify(entry.data).substring(0, 100) : '';
+
+            const html = `
+                <div class="log-entry">
+                    <span class="log-time">${time}</span>
+                    <span class="log-direction ${direction.toLowerCase()}">${direction}</span>
+                    <span class="log-type">${type}</span>
+                    <span class="log-data">${data}</span>
+                </div>
+            `;
+
+            container.insertAdjacentHTML('afterbegin', html);
+
+            // Limit entries
+            while (container.children.length > 100) {
+                container.removeChild(container.lastChild);
+            }
+        }
+
+        function updateTabs() {
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.view === currentView);
+            });
+        }
+
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', async () => {
+                currentView = tab.dataset.view;
+                selectedClient = null;
+                updateTabs();
+                renderClients();
+
+                if (currentView === 'voxta') {
+                    document.getElementById('contentTitle').textContent = 'Raw Voxta Stream';
+                    await fetchVoxtaHistory();
+                } else {
+                    document.getElementById('contentTitle').textContent = 'Select a client';
+                    renderLog([]);
+                }
+            });
+        });
+
+        async function refreshData() {
+            await Promise.all([
+                fetchClients(),
+                fetchVoxtaHistory(),
+                fetch('/state').then(r => r.json()).then(updateState)
+            ]);
+        }
+
+        // Initialize
+        connectWebSocket();
+        refreshData();
+        setInterval(fetchClients, 5000);
+    </script>
+</body>
+</html>
+
