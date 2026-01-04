@@ -136,8 +136,7 @@ class StateResponse(BaseModel):
     """Gateway state response."""
 
     connected: bool
-    session_id: Optional[str]
-    chat_id: Optional[str]
+    chat_active: bool
     ai_state: str
     external_speaker_active: bool
     external_speaker_source: Optional[str]

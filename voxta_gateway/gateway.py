@@ -70,6 +70,8 @@ class Gateway:
             "external_speaker_stopped",
             "voxta_connected",
             "voxta_disconnected",
+            "chat_started",
+            "chat_closed",
         ]
 
         for event_name in events_to_broadcast:

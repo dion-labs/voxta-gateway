@@ -65,17 +65,24 @@ class GatewayState:
     external_speaker_active: bool = False
     external_speaker_source: Optional[str] = None  # "game", "user", etc.
 
+    @property
+    def chat_active(self) -> bool:
+        """Check if there's an active chat session."""
+        return self.chat_id is not None
+
     def to_snapshot(self) -> dict:
         """
         Create a state snapshot for WebSocket clients.
 
         This is sent to clients on connection so they don't need to wait
         for state-changing events to know the current state.
+
+        Note: We expose `chat_active` (boolean) instead of `chat_id` to avoid
+        leaking internal IDs. Clients only need to know if a chat is active.
         """
         return {
             "connected": self.connected,
-            "session_id": self.session_id,
-            "chat_id": self.chat_id,
+            "chat_active": self.chat_active,
             "ai_state": self.ai_state.value,
             "current_speaker_id": self.current_speaker_id,
             "external_speaker_active": self.external_speaker_active,

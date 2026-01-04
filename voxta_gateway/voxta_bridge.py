@@ -115,6 +115,7 @@ class VoxtaBridge:
         # Session/Chat events
         self.client.on(EventType.READY, self._on_ready)
         self.client.on(EventType.CHAT_STARTED, self._on_chat_started)
+        self.client.on(EventType.CHAT_CLOSED, self._on_chat_closed)
         self.client.on(EventType.CHAT_PARTICIPANTS_UPDATED, self._on_participants_updated)
 
         # Reply/Generation events
@@ -221,10 +222,35 @@ class VoxtaBridge:
             f"Chat started: {self.state.chat_id} with {len(self.state.characters)} characters"
         )
 
+        # Notify clients that a chat is now active
+        await self.event_emitter.emit(
+            "chat_started",
+            {"characters": [c.to_dict() for c in self.state.characters.values()]},
+        )
+
         await self.event_emitter.emit(
             "characters_updated",
             {"characters": [c.to_dict() for c in self.state.characters.values()]},
         )
+
+    async def _on_chat_closed(self, data: dict):
+        """Handle chat closed event."""
+        closed_chat_id = data.get("chatId")
+        
+        # Only process if this is our active chat
+        if closed_chat_id == self.state.chat_id:
+            self.logger.info(f"Chat closed: {closed_chat_id}")
+            
+            # Clear chat state
+            self.state.chat_id = None
+            self.state.characters.clear()
+            self.state.ai_state = AIState.IDLE
+            self.state.current_speaker_id = None
+            self.state.external_speaker_active = False
+            self.state.external_speaker_source = None
+            
+            # Notify clients that chat is no longer active
+            await self.event_emitter.emit("chat_closed", {})
 
     async def _on_participants_updated(self, data: dict):
         """Handle participant updates."""

@@ -69,6 +69,8 @@ Connect to `/ws` and send a subscription message:
 ```
 
 Available events:
+- `chat_started` - A chat session became active (safe to send messages)
+- `chat_closed` - The chat session was closed (stop sending messages)
 - `dialogue_received` - User message, AI message, or game dialogue
 - `sentence_ready` - Complete sentence ready for TTS
 - `ai_state_changed` - AI state transition (idle/thinking/speaking)

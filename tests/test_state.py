@@ -59,12 +59,22 @@ class TestGatewayState:
         assert gateway_state.external_speaker_active is False
         assert len(gateway_state.characters) == 0
 
+    def test_chat_active_property(self, gateway_state):
+        """Test chat_active property."""
+        assert gateway_state.chat_active is False
+        
+        gateway_state.chat_id = "chat-123"
+        assert gateway_state.chat_active is True
+        
+        gateway_state.chat_id = None
+        assert gateway_state.chat_active is False
+
     def test_to_snapshot(self, gateway_state):
         """Test snapshot creation."""
         snapshot = gateway_state.to_snapshot()
 
         assert snapshot["connected"] is False
-        assert snapshot["session_id"] is None
+        assert snapshot["chat_active"] is False
         assert snapshot["ai_state"] == "idle"
         assert snapshot["external_speaker_active"] is False
         assert snapshot["characters"] == []
