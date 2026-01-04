@@ -401,6 +401,9 @@ async def websocket_endpoint(websocket: WebSocket):
                 elif data.get("type") == "ping":
                     await websocket.send_json({"type": "pong"})
 
+            except (WebSocketDisconnect, RuntimeError):
+                # Re-raise to be caught by the outer block
+                raise
             except Exception as e:
                 logger.warning(f"Error processing WebSocket message: {e}")
 
