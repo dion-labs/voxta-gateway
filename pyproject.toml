@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "voxta-gateway"
-version = "0.1.0"
+version = "0.1.1.dev1"
 description = "A state-mirroring gateway for the Voxta conversational AI platform, providing high-level semantic APIs for downstream applications."
 readme = "README.md"
 authors = [{ name = "Dion Labs" }]
