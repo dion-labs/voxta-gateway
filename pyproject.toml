@@ -38,6 +38,7 @@ dev = [
     "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.1.0",
+    "coverage-badge>=1.1.0",
 ]
 docs = [
     "mkdocs-material>=9.5.0",
@@ -62,7 +63,7 @@ ignore = []
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-addopts = "--cov=voxta_gateway --cov-report=term-missing"
+addopts = "--cov=voxta_gateway --cov-report=term-missing --cov-report=xml --junitxml=junit.xml"
 
 [tool.coverage.run]
 source = ["voxta_gateway"]
@@ -72,12 +73,20 @@ show_missing = true
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",
+    "if self.debug:",
     "raise AssertionError",
     "raise NotImplementedError",
     "if __name__ == .__main__.:",
     "pass",
+    "raise ImportError",
 ]
 
 [tool.setuptools.packages.find]
 exclude = ["site*", "docs*", "tests*"]
+
+[dependency-groups]
+dev = [
+    "mkdocs-material>=9.7.1",
+    "twine>=6.2.0",
+]
 
