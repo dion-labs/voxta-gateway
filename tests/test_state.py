@@ -1,8 +1,6 @@
 """Tests for the GatewayState module."""
 
-import pytest
-
-from voxta_gateway.state import AIState, CharacterInfo, GatewayState
+from voxta_gateway.state import AIState, CharacterInfo
 
 
 class TestAIState:
@@ -62,10 +60,10 @@ class TestGatewayState:
     def test_chat_active_property(self, gateway_state):
         """Test chat_active property."""
         assert gateway_state.chat_active is False
-        
+
         gateway_state.chat_id = "chat-123"
         assert gateway_state.chat_active is True
-        
+
         gateway_state.chat_id = None
         assert gateway_state.chat_active is False
 
@@ -123,4 +121,3 @@ class TestGatewayState:
 
         result = gateway_state.get_first_character_id()
         assert result in ["char-1", "char-2"]
-

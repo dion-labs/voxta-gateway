@@ -7,6 +7,7 @@ and may be transformed before being sent to WebSocket clients.
 """
 
 import asyncio
+import contextlib
 import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -68,10 +69,8 @@ class EventEmitter:
             callback: The callback to remove
         """
         if event_name in self._listeners:
-            try:
+            with contextlib.suppress(ValueError):
                 self._listeners[event_name].remove(callback)
-            except ValueError:
-                pass
 
     async def emit(self, event_name: str, data: dict[str, Any] | None = None):
         """
@@ -110,6 +109,3 @@ class EventEmitter:
             self._listeners.clear()
         elif event_name in self._listeners:
             del self._listeners[event_name]
-
-
-

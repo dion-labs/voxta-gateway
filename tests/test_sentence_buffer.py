@@ -18,11 +18,13 @@ class TestSentenceBuffer:
         """Create a SentenceBuffer that stores to sentences list."""
 
         async def on_sentence(text, character_id, message_id):
-            sentences.append({
-                "text": text,
-                "character_id": character_id,
-                "message_id": message_id,
-            })
+            sentences.append(
+                {
+                    "text": text,
+                    "character_id": character_id,
+                    "message_id": message_id,
+                }
+            )
 
         return SentenceBuffer(on_sentence)
 
@@ -162,6 +164,3 @@ class TestSentenceBuffer:
         )
 
         assert buffer.get_current_text("msg-1") == "Hello world"
-
-
-

@@ -17,12 +17,13 @@ Usage:
 """
 
 import asyncio
+import contextlib
 import json
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 import websockets
@@ -45,9 +46,9 @@ class GatewayState:
     connected: bool = False
     chat_active: bool = False
     ai_state: str = "idle"
-    current_speaker_id: Optional[str] = None
+    current_speaker_id: str | None = None
     external_speaker_active: bool = False
-    external_speaker_source: Optional[str] = None
+    external_speaker_source: str | None = None
     characters: list[dict] = field(default_factory=list)
 
     def update_from_snapshot(self, snapshot: dict):
@@ -124,15 +125,15 @@ class GatewayClient:
         self.state = GatewayState()
 
         # WebSocket
-        self._websocket: Optional[websockets.WebSocketClientProtocol] = None
+        self._websocket: websockets.WebSocketClientProtocol | None = None
         self._running = False
-        self._listen_task: Optional[asyncio.Task] = None
+        self._listen_task: asyncio.Task | None = None
 
         # Event handlers
         self._handlers: dict[str, list[EventHandler]] = {}
 
         # HTTP client (reusable)
-        self._http_client: Optional[httpx.AsyncClient] = None
+        self._http_client: httpx.AsyncClient | None = None
 
     # ─────────────────────────────────────────────────────────────
     # Event Registration
@@ -171,10 +172,8 @@ class GatewayClient:
     def off(self, event_type: str, handler: EventHandler):
         """Remove an event handler."""
         if event_type in self._handlers:
-            try:
+            with contextlib.suppress(ValueError):
                 self._handlers[event_type].remove(handler)
-            except ValueError:
-                pass
 
     # ─────────────────────────────────────────────────────────────
     # Lifecycle
@@ -273,8 +272,7 @@ class GatewayClient:
                 ConnectionState.READY if self.state.chat_active else ConnectionState.CONNECTED
             )
             self.logger.info(
-                f"Connected! Chat active: {self.state.chat_active}, "
-                f"AI state: {self.state.ai_state}"
+                f"Connected! Chat active: {self.state.chat_active}, AI state: {self.state.ai_state}"
             )
             await self._emit("connected", msg["state"])
         else:
@@ -379,8 +377,8 @@ class GatewayClient:
         self,
         text: str,
         source: str = "user",
-        author: Optional[str] = None,
-        immediate_reply: Optional[bool] = None,
+        author: str | None = None,
+        immediate_reply: bool | None = None,
     ) -> bool:
         """
         Send dialogue to the gateway.
@@ -412,7 +410,7 @@ class GatewayClient:
         self,
         key: str,
         content: str,
-        description: Optional[str] = None,
+        description: str | None = None,
     ) -> bool:
         """
         Send context update to the gateway.
@@ -440,7 +438,7 @@ class GatewayClient:
     async def external_speaker_start(
         self,
         source: str,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> bool:
         """
         Signal that an external speaker started talking.
@@ -476,7 +474,7 @@ class GatewayClient:
     async def tts_playback_start(
         self,
         character_id: str,
-        message_id: Optional[str] = None,
+        message_id: str | None = None,
     ) -> bool:
         """
         Signal that TTS playback started.
@@ -497,7 +495,7 @@ class GatewayClient:
     async def tts_playback_complete(
         self,
         character_id: str,
-        message_id: Optional[str] = None,
+        message_id: str | None = None,
     ) -> bool:
         """
         Signal that TTS playback finished.
@@ -575,7 +573,7 @@ class GatewayClient:
 
         event = asyncio.Event()
 
-        async def on_chat_started(data):
+        async def on_chat_started(_):
             event.set()
 
         self.on("chat_started", on_chat_started)
@@ -616,6 +614,3 @@ class GatewayClient:
             return False
         finally:
             self.off("ai_state_changed", on_state_changed)
-
-
-

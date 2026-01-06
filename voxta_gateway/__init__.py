@@ -35,4 +35,3 @@ __all__ = [
     "GatewayState",
     "__version__",
 ]
-

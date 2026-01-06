@@ -7,7 +7,6 @@ state changes to subscribed downstream applications.
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
 
 
 class AIState(Enum):
@@ -22,10 +21,10 @@ class AIState(Enum):
 class CharacterInfo:
     """Information about a character in the chat session."""
 
-    id: str
+    id: str  # noqa: A003
     name: str
-    creator_notes: Optional[str] = None
-    text_gen_service: Optional[str] = None
+    creator_notes: str | None = None
+    text_gen_service: str | None = None
 
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization."""
@@ -49,21 +48,21 @@ class GatewayState:
 
     # Connection State
     connected: bool = False
-    session_id: Optional[str] = None
+    session_id: str | None = None
 
     # Chat State
-    chat_id: Optional[str] = None
+    chat_id: str | None = None
     characters: dict[str, CharacterInfo] = field(default_factory=dict)
 
     # AI Activity State
     ai_state: AIState = AIState.IDLE
-    current_speaker_id: Optional[str] = None
-    last_message_id: Optional[str] = None
-    last_message_text: Optional[str] = None
+    current_speaker_id: str | None = None
+    last_message_id: str | None = None
+    last_message_text: str | None = None
 
     # External Speaker State (game dialogue, user talking, etc.)
     external_speaker_active: bool = False
-    external_speaker_source: Optional[str] = None  # "game", "user", etc.
+    external_speaker_source: str | None = None  # "game", "user", etc.
 
     @property
     def chat_active(self) -> bool:
@@ -103,9 +102,8 @@ class GatewayState:
         self.external_speaker_active = False
         self.external_speaker_source = None
 
-    def get_first_character_id(self) -> Optional[str]:
+    def get_first_character_id(self) -> str | None:
         """Get the ID of the first character, if any."""
         if self.characters:
             return next(iter(self.characters.keys()))
         return None
-

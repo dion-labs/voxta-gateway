@@ -6,6 +6,7 @@ tracking their event subscriptions and routing events only to clients
 that have subscribed to receive them.
 """
 
+import contextlib
 import logging
 import time
 from collections import deque
@@ -131,10 +132,8 @@ class WebSocketManager:
         """
         if client_id in self.clients:
             client = self.clients[client_id]
-            try:
+            with contextlib.suppress(Exception):
                 await client.websocket.close()
-            except Exception:
-                pass  # Already closed
 
             # Remove from registry FIRST to avoid recursion if broadcast fails
             del self.clients[client_id]
@@ -314,7 +313,10 @@ class WebSocketManager:
         """
         count = 0
         for client in self.clients.values():
-            if self.ALL_EVENTS in client.subscribed_events or event_type in client.subscribed_events:
+            if (
+                self.ALL_EVENTS in client.subscribed_events
+                or event_type in client.subscribed_events
+            ):
                 count += 1
         return count
 
@@ -322,6 +324,3 @@ class WebSocketManager:
     def client_count(self) -> int:
         """Get the total number of connected clients."""
         return len(self.clients)
-
-
-

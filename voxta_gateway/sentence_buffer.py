@@ -10,7 +10,6 @@ import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
-
 # Type alias for sentence callback
 SentenceCallback = Callable[[str, str, str], Awaitable[None]]
 
@@ -110,7 +109,7 @@ class SentenceBuffer:
     async def _extract_sentences(self, buf: MessageBuffer):
         """Extract complete sentences from the buffer."""
         # Only process text we haven't looked at yet
-        unprocessed = buf.text[buf.processed_len:]
+        unprocessed = buf.text[buf.processed_len :]
 
         # Split on sentence boundaries
         parts = self.SENTENCE_PATTERN.split(unprocessed)
@@ -149,7 +148,7 @@ class SentenceBuffer:
         buf = self.buffers[message_id]
 
         # Emit any remaining unprocessed text
-        remaining = buf.text[buf.processed_len:].strip()
+        remaining = buf.text[buf.processed_len :].strip()
         if remaining and remaining not in buf.emitted_sentences:
             await self.on_sentence(remaining, buf.character_id, buf.message_id)
 
@@ -178,6 +177,3 @@ class SentenceBuffer:
         if message_id in self.buffers:
             return self.buffers[message_id].text
         return ""
-
-
-

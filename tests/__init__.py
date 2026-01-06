@@ -1,4 +1,1 @@
 """Tests for voxta-gateway."""
-
-
-

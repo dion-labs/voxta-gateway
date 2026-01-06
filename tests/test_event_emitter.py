@@ -2,8 +2,6 @@
 
 import pytest
 
-from voxta_gateway.event_emitter import EventEmitter
-
 
 class TestEventEmitter:
     """Tests for the EventEmitter class."""
@@ -80,7 +78,7 @@ class TestEventEmitter:
     async def test_off_nonexistent_handler(self, event_emitter):
         """Test removing a handler that doesn't exist (should not error)."""
 
-        async def handler(data):
+        async def handler(_):
             pass
 
         # Should not error
@@ -90,7 +88,7 @@ class TestEventEmitter:
     def test_listener_count(self, event_emitter):
         """Test counting listeners."""
 
-        async def handler(data):
+        async def handler(_):
             pass
 
         assert event_emitter.listener_count("test_event") == 0
@@ -104,7 +102,7 @@ class TestEventEmitter:
     def test_clear_specific_event(self, event_emitter):
         """Test clearing handlers for a specific event."""
 
-        async def handler(data):
+        async def handler(_):
             pass
 
         event_emitter.on("event1", handler)
@@ -118,7 +116,7 @@ class TestEventEmitter:
     def test_clear_all_events(self, event_emitter):
         """Test clearing all handlers."""
 
-        async def handler(data):
+        async def handler(_):
             pass
 
         event_emitter.on("event1", handler)
@@ -134,7 +132,7 @@ class TestEventEmitter:
         """Test that one handler's error doesn't affect others."""
         received = []
 
-        async def error_handler(data):
+        async def error_handler(_):
             raise ValueError("Test error")
 
         async def good_handler(data):
@@ -161,6 +159,3 @@ class TestEventEmitter:
 
         assert len(received) == 1
         assert received[0] == {}
-
-
-

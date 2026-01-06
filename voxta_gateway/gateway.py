@@ -7,7 +7,7 @@ semantic actions into Voxta operations.
 """
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from voxta_gateway.event_emitter import EventEmitter
 from voxta_gateway.sentence_buffer import SentenceBuffer
@@ -140,7 +140,7 @@ class Gateway:
     # High-Level Semantic APIs
     # ─────────────────────────────────────────────────────────────
 
-    async def external_speaker_start(self, source: str, reason: Optional[str] = None):
+    async def external_speaker_start(self, source: str, reason: str | None = None):
         """
         Signal that an external speaker (game NPC, user) started talking.
 
@@ -152,7 +152,9 @@ class Gateway:
             reason: Optional reason for the interrupt
         """
         if self.state.external_speaker_active:
-            self.logger.debug(f"External speaker already active: {self.state.external_speaker_source}")
+            self.logger.debug(
+                f"External speaker already active: {self.state.external_speaker_source}"
+            )
             return
 
         self.logger.info(f"External speaker started: {source} (reason: {reason})")
@@ -214,8 +216,8 @@ class Gateway:
         self,
         text: str,
         source: str,
-        author: Optional[str] = None,
-        immediate_reply: Optional[bool] = None,
+        author: str | None = None,
+        immediate_reply: bool | None = None,
     ):
         """
         Send dialogue that should appear in chat and potentially trigger AI response.
@@ -264,7 +266,7 @@ class Gateway:
         self,
         key: str,
         content: str,
-        description: Optional[str] = None,
+        description: str | None = None,
     ):
         """
         Send context update (not shown in chat, but AI knows about it).
@@ -294,7 +296,7 @@ class Gateway:
     async def tts_playback_start(
         self,
         character_id: str,
-        message_id: Optional[str] = None,
+        message_id: str | None = None,
     ):
         """
         Signal that external TTS playback started (bridge playing audio).
@@ -323,7 +325,7 @@ class Gateway:
     async def tts_playback_complete(
         self,
         character_id: str,
-        message_id: Optional[str] = None,
+        message_id: str | None = None,
     ):
         """
         Signal that external TTS playback finished.
@@ -381,4 +383,3 @@ class Gateway:
     def get_client_history(self, client_id: str) -> list[dict]:
         """Get message history for a specific client."""
         return self.ws_manager.get_client_history(client_id)
-

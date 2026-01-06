@@ -7,9 +7,10 @@ state but never makes decisions based on state.
 """
 
 import asyncio
+import contextlib
 import logging
 from collections import deque
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from voxta_client import VoxtaClient
 from voxta_client.constants import EventType
@@ -44,8 +45,8 @@ class VoxtaBridge:
         self.event_emitter = event_emitter
         self.logger = logger or logging.getLogger("VoxtaBridge")
 
-        self.client: Optional[VoxtaClient] = None
-        self._reconnect_task: Optional[asyncio.Task] = None
+        self.client: VoxtaClient | None = None
+        self._reconnect_task: asyncio.Task | None = None
         self._running = False
 
         # Event history for debugging
@@ -61,10 +62,8 @@ class VoxtaBridge:
         self._running = False
         if self._reconnect_task:
             self._reconnect_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._reconnect_task
-            except asyncio.CancelledError:
-                pass
 
         if self.client:
             await self.client.close()
@@ -82,7 +81,7 @@ class VoxtaBridge:
 
                 # Negotiate and connect
                 connection_token, cookies = self.client.negotiate()
-                
+
                 if not connection_token:
                     raise ConnectionError("Failed to negotiate with Voxta")
 
@@ -166,24 +165,28 @@ class VoxtaBridge:
         import time
 
         event_type = data.get("$type", "unknown") if isinstance(data, dict) else "unknown"
-        self.event_history.append({
-            "direction": "IN",
-            "type": event_type,
-            "data": data if isinstance(data, dict) else {"value": data},
-            "timestamp": time.time(),
-        })
+        self.event_history.append(
+            {
+                "direction": "IN",
+                "type": event_type,
+                "data": data if isinstance(data, dict) else {"value": data},
+                "timestamp": time.time(),
+            }
+        )
 
     async def _on_client_send(self, data: dict):
         """Record outgoing messages to history."""
         import time
 
         event_type = data.get("$type", "unknown")
-        self.event_history.append({
-            "direction": "OUT",
-            "type": event_type,
-            "data": data,
-            "timestamp": time.time(),
-        })
+        self.event_history.append(
+            {
+                "direction": "OUT",
+                "type": event_type,
+                "data": data,
+                "timestamp": time.time(),
+            }
+        )
 
     # ─────────────────────────────────────────────────────────────
     # State Update Observers
@@ -236,11 +239,11 @@ class VoxtaBridge:
     async def _on_chat_closed(self, data: dict):
         """Handle chat closed event."""
         closed_chat_id = data.get("chatId")
-        
+
         # Only process if this is our active chat
         if closed_chat_id == self.state.chat_id:
             self.logger.info(f"Chat closed: {closed_chat_id}")
-            
+
             # Clear chat state
             self.state.chat_id = None
             self.state.characters.clear()
@@ -248,7 +251,7 @@ class VoxtaBridge:
             self.state.current_speaker_id = None
             self.state.external_speaker_active = False
             self.state.external_speaker_source = None
-            
+
             # Notify clients that chat is no longer active
             await self.event_emitter.emit("chat_closed", {})
 
@@ -270,7 +273,7 @@ class VoxtaBridge:
             {"characters": [c.to_dict() for c in self.state.characters.values()]},
         )
 
-    async def _on_reply_generating(self, data: dict):
+    async def _on_reply_generating(self, _: dict):
         """Handle reply generation starting."""
         old_state = self.state.ai_state
         self.state.ai_state = AIState.THINKING
@@ -359,7 +362,7 @@ class VoxtaBridge:
         text = data.get("text", "")
         self.state.last_message_text = text
 
-    async def _on_speech_playback_start(self, data: dict):
+    async def _on_speech_playback_start(self, _: dict):
         """Handle speech playback starting."""
         old_state = self.state.ai_state
         self.state.ai_state = AIState.SPEAKING
@@ -370,7 +373,7 @@ class VoxtaBridge:
                 {"old_state": old_state.value, "new_state": AIState.SPEAKING.value},
             )
 
-    async def _on_speech_playback_complete(self, data: dict):
+    async def _on_speech_playback_complete(self, _: dict):
         """Handle speech playback completion."""
         old_state = self.state.ai_state
         self.state.ai_state = AIState.IDLE
@@ -382,7 +385,7 @@ class VoxtaBridge:
                 {"old_state": old_state.value, "new_state": AIState.IDLE.value},
             )
 
-    async def _on_interrupt_speech(self, data: dict):
+    async def _on_interrupt_speech(self, _: dict):
         """Handle speech interruption."""
         old_state = self.state.ai_state
         self.state.ai_state = AIState.IDLE
@@ -440,7 +443,7 @@ class VoxtaBridge:
                 do_character_inference=do_character_inference,
             )
 
-    async def speech_playback_start(self, message_id: Optional[str] = None):
+    async def speech_playback_start(self, message_id: str | None = None):
         """Notify Voxta that speech playback started."""
         if self.client and self.state.session_id:
             msg_id = message_id or self.state.last_message_id
@@ -448,7 +451,7 @@ class VoxtaBridge:
                 session_id=self.state.session_id, message_id=msg_id
             )
 
-    async def speech_playback_complete(self, message_id: Optional[str] = None):
+    async def speech_playback_complete(self, message_id: str | None = None):
         """Notify Voxta that speech playback completed."""
         if self.client and self.state.session_id:
             msg_id = message_id or self.state.last_message_id
@@ -456,7 +459,7 @@ class VoxtaBridge:
                 session_id=self.state.session_id, message_id=msg_id
             )
 
-    async def character_speech_request(self, character_id: Optional[str] = None, text: str = ""):
+    async def character_speech_request(self, character_id: str | None = None, text: str = ""):
         """Request a character to speak."""
         if self.client and self.state.session_id:
             char_id = character_id or self.state.get_first_character_id()
@@ -468,11 +471,11 @@ class VoxtaBridge:
     async def update_context(
         self,
         context_key: str,
-        contexts: Optional[list[dict[str, Any]]] = None,
-        actions: Optional[list[dict[str, Any]]] = None,
-        events: Optional[list[dict[str, Any]]] = None,
-        set_flags: Optional[list[str]] = None,
-        enable_roles: Optional[dict[str, bool]] = None,
+        contexts: list[dict[str, Any]] | None = None,
+        actions: list[dict[str, Any]] | None = None,
+        events: list[dict[str, Any]] | None = None,
+        set_flags: list[str] | None = None,
+        enable_roles: dict[str, bool] | None = None,
     ):
         """Update session context."""
         if self.client and self.state.session_id:
@@ -485,4 +488,3 @@ class VoxtaBridge:
                 set_flags=set_flags,
                 enable_roles=enable_roles,
             )
-

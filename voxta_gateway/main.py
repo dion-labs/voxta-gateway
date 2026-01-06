@@ -6,11 +6,11 @@ following the API design specified in the architecture document.
 """
 
 import asyncio
+import contextlib
 import logging
 import os
 import uuid
 from contextlib import asynccontextmanager
-from typing import Optional
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
@@ -19,6 +19,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from voxta_gateway.gateway import Gateway
+
+# ... rest of the file ...
 
 # ─────────────────────────────────────────────────────────────
 # Configuration
@@ -39,11 +41,11 @@ logger = logging.getLogger("VoxtaGateway")
 # Gateway Instance
 # ─────────────────────────────────────────────────────────────
 
-gateway: Optional[Gateway] = None
+gateway: Gateway | None = None
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(_: FastAPI):
     """Manage gateway lifecycle."""
     global gateway
     gateway = Gateway(voxta_url=VOXTA_URL, logger=logger)
@@ -59,10 +61,8 @@ async def lifespan(app: FastAPI):
     # Cleanup
     await gateway.stop()
     task.cancel()
-    try:
+    with contextlib.suppress(asyncio.CancelledError):
         await task
-    except asyncio.CancelledError:
-        pass
 
 
 # ─────────────────────────────────────────────────────────────
@@ -93,8 +93,8 @@ class DialogueRequest(BaseModel):
 
     text: str
     source: str = "user"  # "user", "game", "twitch"
-    author: Optional[str] = None
-    immediate_reply: Optional[bool] = None
+    author: str | None = None
+    immediate_reply: bool | None = None
 
 
 class ContextRequest(BaseModel):
@@ -102,14 +102,14 @@ class ContextRequest(BaseModel):
 
     key: str
     content: str
-    description: Optional[str] = None
+    description: str | None = None
 
 
 class ExternalSpeakerStartRequest(BaseModel):
     """Request body for external speaker start."""
 
     source: str  # "game", "user"
-    reason: Optional[str] = None
+    reason: str | None = None
 
 
 class ExternalSpeakerStopRequest(BaseModel):
@@ -122,7 +122,7 @@ class TTSPlaybackRequest(BaseModel):
     """Request body for TTS playback signals."""
 
     character_id: str
-    message_id: Optional[str] = None
+    message_id: str | None = None
 
 
 class HealthResponse(BaseModel):
@@ -139,7 +139,7 @@ class StateResponse(BaseModel):
     chat_active: bool
     ai_state: str
     external_speaker_active: bool
-    external_speaker_source: Optional[str]
+    external_speaker_source: str | None
     characters: list[dict]
 
 
@@ -249,12 +249,15 @@ async def external_speaker_start(req: ExternalSpeakerStartRequest):
 
 
 @app.post("/external_speaker_stop")
-async def external_speaker_stop(req: ExternalSpeakerStopRequest = ExternalSpeakerStopRequest()):
+async def external_speaker_stop(req: ExternalSpeakerStopRequest | None = None):
     """
     Signal that external speaker stopped talking.
 
     Releases the "busy" state and optionally triggers AI response.
     """
+    if req is None:
+        req = ExternalSpeakerStopRequest()
+
     if not gateway:
         raise HTTPException(status_code=503, detail="Gateway not initialized")
 
@@ -386,15 +389,15 @@ async def websocket_endpoint(websocket: WebSocket):
     source_filters = init_msg.get("filters", {})  # Optional source filters
 
     # Register client
-    client = await gateway.ws_manager.connect(
-        websocket, client_id, events, source_filters=source_filters
-    )
+    await gateway.ws_manager.connect(websocket, client_id, events, source_filters=source_filters)
 
     # Send state snapshot
-    await websocket.send_json({
-        "type": "snapshot",
-        "state": gateway.state.to_snapshot(),
-    })
+    await websocket.send_json(
+        {
+            "type": "snapshot",
+            "state": gateway.state.to_snapshot(),
+        }
+    )
 
     logger.info(f"WebSocket client connected: {client_id}")
 
@@ -446,4 +449,3 @@ def run():
 
 if __name__ == "__main__":
     run()
-
