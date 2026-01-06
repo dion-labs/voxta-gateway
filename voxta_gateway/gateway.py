@@ -359,11 +359,24 @@ class Gateway:
         return list(self.bridge.event_history)
 
     def get_connected_clients(self) -> dict[str, Any]:
-        """Get information about all connected WebSocket clients."""
-        return {
-            client_id: client.to_debug_dict()
-            for client_id, client in self.ws_manager.clients.items()
-        }
+        """Get information about all clients (connected or with history)."""
+        all_client_ids = set(self.ws_manager.clients.keys()) | set(self.ws_manager.histories.keys())
+        result = {}
+        for client_id in all_client_ids:
+            client = self.ws_manager.clients.get(client_id)
+            history = self.ws_manager.histories.get(client_id, [])
+            if client:
+                info = client.to_debug_dict(history_len=len(history))
+                info["connected"] = True
+            else:
+                info = {
+                    "client_id": client_id,
+                    "connected": False,
+                    "message_count": len(history),
+                    "subscribed_events": [],
+                }
+            result[client_id] = info
+        return result
 
     def get_client_history(self, client_id: str) -> list[dict]:
         """Get message history for a specific client."""

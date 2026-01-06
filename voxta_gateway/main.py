@@ -320,10 +320,20 @@ async def debug_client_history(client_id: str):
         raise HTTPException(status_code=503, detail="Gateway not initialized")
 
     history = gateway.get_client_history(client_id)
-    if not history and client_id not in gateway.ws_manager.clients:
+    if not history and client_id not in gateway.ws_manager.histories:
         raise HTTPException(status_code=404, detail="Client not found")
 
     return history
+
+
+@app.post("/debug/clients/{client_id}/clear")
+async def debug_clear_client_history(client_id: str):
+    """Clear message history for a specific client."""
+    if not gateway:
+        raise HTTPException(status_code=503, detail="Gateway not initialized")
+
+    gateway.ws_manager.clear_history(client_id)
+    return {"status": "ok"}
 
 
 @app.get("/debug/voxta/history")
@@ -373,9 +383,12 @@ async def websocket_endpoint(websocket: WebSocket):
     # Extract subscription info
     client_id = init_msg.get("client_id", f"anon-{uuid.uuid4().hex[:8]}")
     events = init_msg.get("events", ["all"])
+    source_filters = init_msg.get("filters", {})  # Optional source filters
 
     # Register client
-    client = await gateway.ws_manager.connect(websocket, client_id, events)
+    client = await gateway.ws_manager.connect(
+        websocket, client_id, events, source_filters=source_filters
+    )
 
     # Send state snapshot
     await websocket.send_json({
@@ -394,7 +407,8 @@ async def websocket_endpoint(websocket: WebSocket):
                 # Handle subscription updates
                 if data.get("type") == "subscribe":
                     new_events = data.get("events", ["all"])
-                    gateway.ws_manager.update_subscriptions(client_id, new_events)
+                    new_filters = data.get("filters", {})
+                    gateway.ws_manager.update_subscriptions(client_id, new_events, new_filters)
 
                 # Handle ping
                 elif data.get("type") == "ping":
@@ -411,7 +425,7 @@ async def websocket_endpoint(websocket: WebSocket):
     except Exception as e:
         logger.error(f"WebSocket error for {client_id}: {e}")
     finally:
-        gateway.ws_manager.remove(client_id)
+        await gateway.ws_manager.remove(client_id)
 
 
 # ─────────────────────────────────────────────────────────────

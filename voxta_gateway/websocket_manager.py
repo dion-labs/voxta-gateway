@@ -22,16 +22,18 @@ class ConnectedClient:
     client_id: str
     websocket: WebSocket
     subscribed_events: set[str] = field(default_factory=set)
-    message_history: deque[dict] = field(default_factory=lambda: deque(maxlen=100))
+    # event_type -> set of allowed sources. If empty or missing, all sources allowed.
+    source_filters: dict[str, set[str]] = field(default_factory=dict)
     connected_at: float = field(default_factory=time.time)
     last_message_at: float = field(default_factory=time.time)
 
-    def to_debug_dict(self) -> dict:
+    def to_debug_dict(self, history_len: int = 0) -> dict:
         """Convert to dictionary for debug endpoints."""
         return {
             "client_id": self.client_id,
             "subscribed_events": list(self.subscribed_events),
-            "message_count": len(self.message_history),
+            "source_filters": {k: list(v) for k, v in self.source_filters.items()},
+            "message_count": history_len,
             "connected_at": self.connected_at,
             "last_message_at": self.last_message_at,
         }
@@ -44,7 +46,7 @@ class WebSocketManager:
     Features:
     - Client registration with event subscriptions
     - Selective broadcasting based on subscriptions
-    - Per-client message history for debugging
+    - Per-client message history for debugging (persists across reconnects)
     - Automatic cleanup on disconnect
 
     Usage:
@@ -61,6 +63,7 @@ class WebSocketManager:
 
     def __init__(self, logger: logging.Logger | None = None):
         self.clients: dict[str, ConnectedClient] = {}
+        self.histories: dict[str, deque[dict]] = {}
         self.logger = logger or logging.getLogger("WebSocketManager")
 
     async def connect(
@@ -68,6 +71,7 @@ class WebSocketManager:
         websocket: WebSocket,
         client_id: str,
         events: list[str] | None = None,
+        source_filters: dict[str, list[str]] | None = None,
     ) -> ConnectedClient:
         """
         Register a new WebSocket client.
@@ -76,6 +80,7 @@ class WebSocketManager:
             websocket: The WebSocket connection
             client_id: Unique identifier for this client
             events: List of event types to subscribe to
+            source_filters: Optional dictionary mapping event types to allowed sources
 
         Returns:
             The created ConnectedClient instance
@@ -89,11 +94,30 @@ class WebSocketManager:
             client_id=client_id,
             websocket=websocket,
             subscribed_events=set(events) if events else {self.ALL_EVENTS},
+            source_filters={k: set(v) for k, v in source_filters.items()} if source_filters else {},
         )
 
         self.clients[client_id] = client
+
+        # Initialize or preserve history
+        if client_id not in self.histories:
+            self.histories[client_id] = deque(maxlen=100)
+
+        # Log connection event to history
+        conn_event_data = {"client_id": client_id}
+        conn_event = {
+            "type": "client_connected",
+            "data": conn_event_data,
+            "timestamp": time.time(),
+        }
+        self.histories[client_id].append(conn_event)
+
+        # Broadcast connection event
+        await self.broadcast("client_connected", conn_event_data)
+
         self.logger.info(
-            f"Client connected: {client_id} (subscribed to: {client.subscribed_events})"
+            f"Client connected: {client_id} (subscribed to: {client.subscribed_events}, "
+            f"filters: {client.source_filters})"
         )
 
         return client
@@ -111,10 +135,15 @@ class WebSocketManager:
                 await client.websocket.close()
             except Exception:
                 pass  # Already closed
+
+            # Remove from registry FIRST to avoid recursion if broadcast fails
             del self.clients[client_id]
+
+            # Log and broadcast disconnect event
+            await self._log_disconnect(client_id)
             self.logger.info(f"Client disconnected: {client_id}")
 
-    def remove(self, client_id: str):
+    async def remove(self, client_id: str):
         """
         Remove a client without closing (use when already disconnected).
 
@@ -122,8 +151,35 @@ class WebSocketManager:
             client_id: The client to remove
         """
         if client_id in self.clients:
+            # Remove from registry FIRST to avoid recursion if broadcast fails
             del self.clients[client_id]
+
+            # Log and broadcast disconnect event
+            await self._log_disconnect(client_id)
             self.logger.info(f"Client removed: {client_id}")
+
+    async def _log_disconnect(self, client_id: str):
+        """Log a disconnect event to history."""
+        if client_id in self.histories:
+            disc_event_data = {"client_id": client_id}
+            disc_event = {
+                "type": "client_disconnected",
+                "data": disc_event_data,
+                "timestamp": time.time(),
+            }
+            self.histories[client_id].append(disc_event)
+            await self.broadcast("client_disconnected", disc_event_data)
+
+    def clear_history(self, client_id: str):
+        """
+        Clear message history for a client.
+
+        Args:
+            client_id: The client to clear history for
+        """
+        if client_id in self.histories:
+            self.histories[client_id].clear()
+            self.logger.info(f"Cleared history for client: {client_id}")
 
     async def broadcast(self, event_type: str, data: dict[str, Any]):
         """
@@ -140,24 +196,36 @@ class WebSocketManager:
         }
 
         disconnected: list[str] = []
+        source = data.get("source")
 
         for client_id, client in self.clients.items():
-            # Check if client is subscribed to this event
-            if (
+            # 1. Check if client is subscribed to this event
+            is_subscribed = (
                 self.ALL_EVENTS in client.subscribed_events
                 or event_type in client.subscribed_events
-            ):
-                try:
-                    await client.websocket.send_json(message)
-                    client.message_history.append(message)
-                    client.last_message_at = time.time()
-                except Exception as e:
-                    self.logger.warning(f"Failed to send to {client_id}: {e}")
-                    disconnected.append(client_id)
+            )
+            if not is_subscribed:
+                continue
+
+            # 2. Check source filters if applicable
+            if source and event_type in client.source_filters:
+                allowed_sources = client.source_filters[event_type]
+                if allowed_sources and source not in allowed_sources:
+                    continue
+
+            try:
+                await client.websocket.send_json(message)
+                # Add to history (which persists across reconnects)
+                if client_id in self.histories:
+                    self.histories[client_id].append(message)
+                client.last_message_at = time.time()
+            except Exception as e:
+                self.logger.warning(f"Failed to send to {client_id}: {e}")
+                disconnected.append(client_id)
 
         # Clean up disconnected clients
         for client_id in disconnected:
-            self.remove(client_id)
+            await self.remove(client_id)
 
     async def send_to_client(self, client_id: str, event_type: str, data: dict[str, Any]):
         """
@@ -180,23 +248,37 @@ class WebSocketManager:
 
         try:
             await client.websocket.send_json(message)
-            client.message_history.append(message)
+            # Add to history
+            if client_id in self.histories:
+                self.histories[client_id].append(message)
             client.last_message_at = time.time()
         except Exception as e:
             self.logger.warning(f"Failed to send to {client_id}: {e}")
-            self.remove(client_id)
+            await self.remove(client_id)
 
-    def update_subscriptions(self, client_id: str, events: list[str]):
+    def update_subscriptions(
+        self,
+        client_id: str,
+        events: list[str],
+        source_filters: dict[str, list[str]] | None = None,
+    ):
         """
         Update a client's event subscriptions.
 
         Args:
             client_id: The client to update
             events: New list of events to subscribe to
+            source_filters: Optional dictionary mapping event types to allowed sources
         """
         if client_id in self.clients:
             self.clients[client_id].subscribed_events = set(events)
-            self.logger.info(f"Updated subscriptions for {client_id}: {events}")
+            if source_filters is not None:
+                self.clients[client_id].source_filters = {
+                    k: set(v) for k, v in source_filters.items()
+                }
+            self.logger.info(
+                f"Updated subscriptions for {client_id}: {events} (filters: {source_filters})"
+            )
 
     def get_client(self, client_id: str) -> ConnectedClient | None:
         """Get a client by ID."""
@@ -216,8 +298,8 @@ class WebSocketManager:
         Returns:
             List of messages sent to this client
         """
-        if client_id in self.clients:
-            return list(self.clients[client_id].message_history)
+        if client_id in self.histories:
+            return list(self.histories[client_id])
         return []
 
     def get_subscriber_count(self, event_type: str) -> int:
@@ -240,4 +322,6 @@ class WebSocketManager:
     def client_count(self) -> int:
         """Get the total number of connected clients."""
         return len(self.clients)
+
+
 

@@ -97,6 +97,7 @@ class GatewayClient:
         gateway_url: str = "http://localhost:8081",
         client_id: str = "gateway-client",
         events: list[str] | None = None,
+        filters: dict[str, list[str]] | None = None,
         reconnect_delay: float = 5.0,
         logger: logging.Logger | None = None,
     ):
@@ -107,12 +108,14 @@ class GatewayClient:
             gateway_url: HTTP URL of the gateway (ws:// derived automatically)
             client_id: Unique identifier for this client
             events: List of events to subscribe to (default: essential events)
+            filters: Optional dictionary mapping event types to allowed sources
             reconnect_delay: Seconds to wait before reconnecting after disconnect
             logger: Optional logger instance
         """
         self.gateway_url = gateway_url.rstrip("/")
         self.client_id = client_id
         self.events = events or ["chat_started", "chat_closed", "ai_state_changed"]
+        self.filters = filters or {}
         self.reconnect_delay = reconnect_delay
         self.logger = logger or logging.getLogger(f"GatewayClient.{client_id}")
 
@@ -250,13 +253,15 @@ class GatewayClient:
         self._websocket = await websockets.connect(ws_url)
 
         # Subscribe to events
-        await self._websocket.send(
-            json.dumps({
-                "type": "subscribe",
-                "client_id": self.client_id,
-                "events": self.events,
-            })
-        )
+        subscription = {
+            "type": "subscribe",
+            "client_id": self.client_id,
+            "events": self.events,
+        }
+        if self.filters:
+            subscription["filters"] = self.filters
+
+        await self._websocket.send(json.dumps(subscription))
 
         # Wait for snapshot
         response = await self._websocket.recv()
@@ -611,4 +616,6 @@ class GatewayClient:
             return False
         finally:
             self.off("ai_state_changed", on_state_changed)
+
+
 
