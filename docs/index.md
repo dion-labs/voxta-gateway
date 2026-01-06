@@ -96,6 +96,7 @@ The Voxta Gateway is a state-mirroring middleware that sits between the Voxta co
 
 - [Getting Started](getting-started.md) - Install and run the gateway
 - [Building Clients](client-guide.md) - Best practices for downstream apps
+- [Migration Guide](migration-guide.md) - Moving existing apps to the Gateway
 - [API Reference](api.md) - Complete endpoint documentation
 - [Development Guide](development-guide.md) - Contributing and architecture
 

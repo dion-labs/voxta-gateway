@@ -240,3 +240,5 @@ class TestGatewayClient:
         with pytest.raises(RuntimeError, match="no active chat"):
             await client.send_context("key", "content")
 
+
+

@@ -162,3 +162,5 @@ class TestEventEmitter:
         assert len(received) == 1
         assert received[0] == {}
 
+
+

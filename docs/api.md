@@ -50,3 +50,5 @@ WS:    ws://localhost:8081/ws
 - [WebSocket Protocol](api/websocket.md) - Connection and messaging
 - [Event Types](api/events.md) - All event payloads
 
+
+

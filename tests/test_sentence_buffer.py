@@ -163,3 +163,5 @@ class TestSentenceBuffer:
 
         assert buffer.get_current_text("msg-1") == "Hello world"
 
+
+

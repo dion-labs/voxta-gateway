@@ -396,3 +396,5 @@ The Gateway is a **translator** and **state broadcaster**. It should be:
 
 If you're adding lots of code to the Gateway, you're probably solving the wrong problem in the wrong place.
 
+
+
