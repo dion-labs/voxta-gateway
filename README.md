@@ -1,5 +1,6 @@
 # Voxta Gateway
 
+[![Documentation](https://img.shields.io/badge/docs-gateway.voxta.dionlabs.ai-blue.svg)](https://gateway.voxta.dionlabs.ai)
 [![Build](https://github.com/dion-labs/voxta-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/dion-labs/voxta-gateway/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/dion-labs/voxta-gateway/branch/main/graph/badge.svg)](https://codecov.io/gh/dion-labs/voxta-gateway)
 [![PyPI version](https://img.shields.io/pypi/v/voxta-gateway.svg)](https://pypi.org/project/voxta-gateway/)
@@ -8,6 +9,10 @@
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
 A state-mirroring gateway for the Voxta conversational AI platform, providing high-level semantic APIs for downstream applications.
+
+## Documentation
+
+Full documentation is available at **[gateway.voxta.dionlabs.ai](https://gateway.voxta.dionlabs.ai)**.
 
 ## Overview
 

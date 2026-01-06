@@ -51,6 +51,7 @@ voxta-gateway = "voxta_gateway.main:run"
 
 [project.urls]
 Homepage = "https://github.com/dion-labs/voxta-gateway"
+Documentation = "https://gateway.voxta.dionlabs.ai"
 
 [tool.ruff]
 line-length = 100
