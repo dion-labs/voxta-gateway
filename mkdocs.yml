@@ -36,6 +36,7 @@ nav:
   - Home: index.md
   - Getting Started: getting-started.md
   - Building Clients: client-guide.md
+  - Migration Guide: migration-guide.md
   - Development Guide: development-guide.md
   - API Reference:
       - Overview: api.md
@@ -66,4 +67,5 @@ markdown_extensions:
 
 plugins:
   - search
+
 
