@@ -235,6 +235,16 @@
             color: var(--accent-purple);
         }
 
+        .log-entry.event {
+            background: rgba(88, 166, 255, 0.05);
+            border-left: 2px solid var(--accent-blue);
+        }
+
+        .log-entry.event .log-type {
+            color: var(--accent-yellow);
+            font-weight: 600;
+        }
+
         .log-type {
             color: var(--accent-blue);
             width: 200px;
@@ -359,6 +369,7 @@
                         <button class="tab active" data-view="voxta">Voxta Traffic</button>
                         <button class="tab" data-view="client">Client Traffic</button>
                     </div>
+                    <button id="clearBtn" class="refresh-btn" style="display: none; border-color: var(--accent-red); color: var(--accent-red);" onclick="clearLog()">Clear Logs</button>
                     <button class="refresh-btn" onclick="refreshData()">Refresh</button>
                 </div>
             </div>
@@ -387,10 +398,18 @@
 
             ws.onopen = () => {
                 document.getElementById('connectionStatus').className = 'status-indicator connected';
+                
+                // Use persistent client ID to prevent proliferation
+                let debugId = localStorage.getItem('voxta_debug_id');
+                if (!debugId) {
+                    debugId = 'debug-ui-' + Math.random().toString(36).substring(2, 9);
+                    localStorage.setItem('voxta_debug_id', debugId);
+                }
+
                 // Subscribe to all events for debugging
                 ws.send(JSON.stringify({
                     type: 'subscribe',
-                    client_id: 'debug-ui-' + Date.now(),
+                    client_id: debugId,
                     events: ['all']
                 }));
             };
@@ -407,35 +426,44 @@
         }
 
         function handleMessage(msg) {
-            if (msg.type === 'snapshot') {
-                updateState(msg.state);
-            } else if (msg.type === 'ai_state_changed') {
-                document.getElementById('aiState').textContent = msg.data.new_state;
-                document.getElementById('aiState').className = `state-value ${msg.data.new_state}`;
-            } else if (msg.type === 'external_speaker_started') {
-                document.getElementById('extSpeaker').textContent = msg.data.source;
-                document.getElementById('extSpeaker').className = 'state-value true';
-            } else if (msg.type === 'external_speaker_stopped') {
-                document.getElementById('extSpeaker').textContent = 'inactive';
-                document.getElementById('extSpeaker').className = 'state-value false';
-            } else if (msg.type === 'voxta_connected') {
-                document.getElementById('voxtaStatus').textContent = 'connected';
-                document.getElementById('voxtaStatus').className = 'state-value true';
-            } else if (msg.type === 'voxta_disconnected') {
-                document.getElementById('voxtaStatus').textContent = 'disconnected';
-                document.getElementById('voxtaStatus').className = 'state-value false';
-            } else if (msg.type === 'characters_updated') {
-                updateCharacters(msg.data.characters);
-            }
+            try {
+                if (msg.type === 'snapshot') {
+                    updateState(msg.state);
+                } else if (msg.type === 'ai_state_changed') {
+                    document.getElementById('aiState').textContent = msg.data.new_state;
+                    document.getElementById('aiState').className = `state-value ${msg.data.new_state}`;
+                } else if (msg.type === 'external_speaker_started') {
+                    document.getElementById('extSpeaker').textContent = msg.data.source;
+                    document.getElementById('extSpeaker').className = 'state-value true';
+                } else if (msg.type === 'external_speaker_stopped') {
+                    document.getElementById('extSpeaker').textContent = 'inactive';
+                    document.getElementById('extSpeaker').className = 'state-value false';
+                } else if (msg.type === 'voxta_connected') {
+                    document.getElementById('voxtaStatus').textContent = 'connected';
+                    document.getElementById('voxtaStatus').className = 'state-value true';
+                } else if (msg.type === 'voxta_disconnected') {
+                    document.getElementById('voxtaStatus').textContent = 'disconnected';
+                    document.getElementById('voxtaStatus').className = 'state-value false';
+                } else if (msg.type === 'characters_updated') {
+                    updateCharacters(msg.data.characters);
+                } else if (msg.type === 'client_connected' || msg.type === 'client_disconnected') {
+                    fetchClients();
+                    if (selectedClient === msg.data.client_id) {
+                        selectClient(selectedClient);
+                    }
+                }
 
-            // Add to visual log if we're showing real-time
-            if (currentView === 'voxta') {
-                addLogEntry({
-                    direction: 'IN',
-                    type: msg.type,
-                    data: msg.data,
-                    timestamp: msg.timestamp || Date.now() / 1000
-                });
+                // Add to visual log if we're showing real-time
+                if (currentView === 'voxta' || (currentView === 'client' && selectedClient === msg.data.client_id)) {
+                    addLogEntry({
+                        direction: currentView === 'voxta' ? 'IN' : 'OUT',
+                        type: msg.type,
+                        data: msg.data,
+                        timestamp: msg.timestamp || Date.now() / 1000
+                    });
+                }
+            } catch (e) {
+                console.error('Error handling WebSocket message:', e, msg);
             }
         }
 
@@ -492,9 +520,13 @@
             }
 
             container.innerHTML = clients.map(([id, data]) => `
-                <div class="client-item ${selectedClient === id ? 'selected' : ''}" onclick="selectClient('${id}')">
-                    <div class="client-name">${id}</div>
-                    <div class="client-events">${data.subscribed_events.join(', ')}</div>
+                <div class="client-item ${selectedClient === id ? 'selected' : ''}" onclick="selectClient('${id}')" style="opacity: ${data.connected ? 1 : 0.6}">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div class="client-name">${id}</div>
+                        <div class="status-indicator ${data.connected ? 'connected' : 'disconnected'}" style="width: 6px; height: 6px; box-shadow: none;"></div>
+                    </div>
+                    <div class="client-events">${data.subscribed_events.join(', ') || 'no subscriptions'}</div>
+                    <div style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">${data.message_count} messages</div>
                 </div>
             `).join('');
         }
@@ -505,13 +537,32 @@
             renderClients();
             updateTabs();
             document.getElementById('contentTitle').textContent = `Client: ${clientId}`;
+            document.getElementById('clearBtn').style.display = 'block';
 
             try {
                 const resp = await fetch(`/debug/clients/${clientId}/history`);
                 const history = await resp.json();
-                renderLog(history.map(h => ({...h, direction: 'OUT'})));
+                renderLog(history.map(h => ({
+                    ...h, 
+                    direction: (h.type === 'client_connected' || h.type === 'client_disconnected') ? 'EVENT' : 'OUT'
+                })));
             } catch (e) {
                 console.error('Failed to fetch client history:', e);
+            }
+        }
+
+        async function clearLog() {
+            if (!selectedClient) return;
+            if (!confirm(`Clear logs for ${selectedClient}?`)) return;
+
+            try {
+                await fetch(`/debug/clients/${selectedClient}/clear`, { method: 'POST' });
+                await refreshData();
+                if (currentView === 'client' && selectedClient) {
+                    selectClient(selectedClient);
+                }
+            } catch (e) {
+                console.error('Failed to clear log:', e);
             }
         }
 
@@ -547,11 +598,12 @@
                 const direction = entry.direction || 'IN';
                 const type = entry.type || '?';
                 const data = entry.data ? JSON.stringify(entry.data).substring(0, 100) : '';
+                const isEvent = direction === 'EVENT';
 
                 return `
-                    <div class="log-entry">
+                    <div class="log-entry ${isEvent ? 'event' : ''}">
                         <span class="log-time">${time}</span>
-                        <span class="log-direction ${direction.toLowerCase()}">${direction}</span>
+                        <span class="log-direction ${direction.toLowerCase()}">${isEvent ? '—' : direction}</span>
                         <span class="log-type">${type}</span>
                         <span class="log-data">${data}</span>
                     </div>
@@ -570,11 +622,12 @@
             const direction = entry.direction || 'IN';
             const type = entry.type || '?';
             const data = entry.data ? JSON.stringify(entry.data).substring(0, 100) : '';
+            const isEvent = direction === 'EVENT' || type === 'client_connected' || type === 'client_disconnected';
 
             const html = `
-                <div class="log-entry">
+                <div class="log-entry ${isEvent ? 'event' : ''}">
                     <span class="log-time">${time}</span>
-                    <span class="log-direction ${direction.toLowerCase()}">${direction}</span>
+                    <span class="log-direction ${direction.toLowerCase()}">${isEvent ? '—' : direction}</span>
                     <span class="log-type">${type}</span>
                     <span class="log-data">${data}</span>
                 </div>
@@ -600,6 +653,7 @@
                 selectedClient = null;
                 updateTabs();
                 renderClients();
+                document.getElementById('clearBtn').style.display = 'none';
 
                 if (currentView === 'voxta') {
                     document.getElementById('contentTitle').textContent = 'Raw Voxta Stream';
@@ -626,4 +680,6 @@
     </script>
 </body>
 </html>
+
+
 
