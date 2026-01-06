@@ -1,5 +1,9 @@
 """Tests for the GatewayClient module."""
 
+import asyncio
+import json
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 
 from voxta_gateway.client import ConnectionState, GatewayClient, GatewayState
@@ -234,3 +238,231 @@ class TestGatewayClient:
 
         with pytest.raises(RuntimeError, match="no active chat"):
             await client.send_context("key", "content")
+
+    @pytest.mark.asyncio
+    async def test_start_stop(self):
+        """Test client start and stop sequence."""
+        client = GatewayClient(gateway_url="http://localhost:8081")
+
+        with patch("httpx.AsyncClient") as mock_http_cls, patch(
+            "websockets.connect", new_callable=AsyncMock
+        ) as mock_ws_connect:
+            mock_http = mock_http_cls.return_value
+            mock_http.aclose = AsyncMock()
+
+            mock_ws = AsyncMock()
+            mock_ws_connect.return_value = mock_ws
+
+            # Mock the snapshot response
+            mock_ws.recv.return_value = json.dumps(
+                {
+                    "type": "snapshot",
+                    "state": {
+                        "connected": True,
+                        "chat_active": False,
+                        "ai_state": "idle",
+                        "characters": [],
+                    },
+                }
+            )
+
+            # Make _listen stay open until we stop it
+            listen_event = asyncio.Event()
+
+            async def mock_aiter(_):
+                await listen_event.wait()
+                yield json.dumps({"type": "test"})
+
+            mock_ws.__aiter__ = mock_aiter
+
+            # We want to run start, but it has a while self._running loop.
+            # We can use a task and then stop it.
+            client_task = asyncio.create_task(client.start())
+
+            # Wait for it to connect
+            for _ in range(10):
+                if client.connection_state == ConnectionState.CONNECTED:
+                    break
+                await asyncio.sleep(0.05)
+
+            assert client._running is True
+            assert client.connection_state == ConnectionState.CONNECTED
+
+            # Trigger disconnect and stop
+            listen_event.set()
+            await client.stop()
+            assert client._running is False
+            mock_ws.close.assert_called()
+            await client_task
+
+    @pytest.mark.asyncio
+    async def test_connect_once_success(self):
+        """Test successful one-time connection."""
+        client = GatewayClient()
+        with patch("httpx.AsyncClient") as mock_http_cls, patch(
+            "websockets.connect", new_callable=AsyncMock
+        ) as mock_ws_connect:
+            mock_http = mock_http_cls.return_value
+            mock_http.aclose = AsyncMock()
+
+            mock_ws = AsyncMock()
+            mock_ws_connect.return_value = mock_ws
+            mock_ws.recv.return_value = json.dumps(
+                {"type": "snapshot", "state": {"connected": True, "chat_active": True}}
+            )
+
+            result = await client.connect_once()
+            assert result is True
+            assert client.connection_state == ConnectionState.READY
+
+    @pytest.mark.asyncio
+    async def test_http_actions(self):
+        """Test HTTP action methods (send_dialogue, health_check, etc)."""
+        client = GatewayClient()
+        client.state.chat_active = True
+
+        with patch("httpx.AsyncClient") as mock_http_cls:
+            mock_http = mock_http_cls.return_value
+            mock_http.post = AsyncMock()
+            mock_http.get = AsyncMock()
+
+            # health_check
+            mock_resp = MagicMock()
+            mock_resp.json.return_value = {"status": "ok"}
+            mock_resp.status_code = 200
+            mock_http.get.return_value = mock_resp
+
+            res = await client.health_check()
+            assert res["status"] == "ok"
+
+            # send_dialogue
+            mock_post_resp = MagicMock()
+            mock_post_resp.status_code = 200
+            mock_http.post.return_value = mock_post_resp
+
+            res = await client.send_dialogue("hello")
+            assert res is True
+
+            # external_speaker_start
+            res = await client.external_speaker_start("game", "reason")
+            assert res is True
+
+    @pytest.mark.asyncio
+    async def test_wait_for_chat(self):
+        """Test wait_for_chat utility."""
+        client = GatewayClient()
+        client.state.chat_active = False
+
+        wait_task = asyncio.create_task(client.wait_for_chat(timeout=1.0))
+        await asyncio.sleep(0.1)
+
+        # Simulate chat started event
+        await client._handle_event({"type": "chat_started", "data": {"characters": []}})
+
+        result = await wait_task
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_wait_for_idle(self):
+        """Test wait_for_idle utility."""
+        client = GatewayClient()
+        client.state.ai_state = "speaking"
+
+        wait_task = asyncio.create_task(client.wait_for_idle(timeout=1.0))
+        await asyncio.sleep(0.1)
+
+        # Simulate state changed event
+        await client._handle_event({"type": "ai_state_changed", "data": {"new_state": "idle"}})
+
+        result = await wait_task
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_wait_for_chat_timeout(self):
+        """Test wait_for_chat timeout."""
+        client = GatewayClient()
+        client.state.chat_active = False
+
+        result = await client.wait_for_chat(timeout=0.01)
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_get_state_and_health(self):
+        """Test get_state and health_check."""
+        client = GatewayClient()
+        with patch("httpx.AsyncClient") as mock_http_cls:
+            mock_http = mock_http_cls.return_value
+            mock_http.get = AsyncMock()
+            mock_resp = MagicMock()
+            mock_resp.json.return_value = {"val": 1}
+            mock_resp.status_code = 200
+            mock_http.get.return_value = mock_resp
+
+            assert await client.get_state() == {"val": 1}
+            assert await client.health_check() == {"val": 1}
+
+    @pytest.mark.asyncio
+    async def test_tts_playback_actions(self):
+        """Test TTS playback start/complete."""
+        client = GatewayClient()
+        with patch("httpx.AsyncClient") as mock_http_cls:
+            mock_http = mock_http_cls.return_value
+            mock_http.post = AsyncMock()
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_http.post.return_value = mock_resp
+
+            assert await client.tts_playback_start("c1", "m1") is True
+            assert await client.tts_playback_complete("c1", "m1") is True
+
+    @pytest.mark.asyncio
+    async def test_handler_error_isolation(self):
+        """Test that one failing handler doesn't stop others."""
+        client = GatewayClient()
+
+        results = []
+
+        @client.on("test")
+        async def failing_handler(_):
+            raise RuntimeError("Boom")
+
+        @client.on("test")
+        async def success_handler(data):
+            results.append(data)
+
+        await client._emit("test", {"ok": True})
+        assert results == [{"ok": True}]
+
+    @pytest.mark.asyncio
+    async def test_start_connection_error(self):
+        """Test reconnection logic on error."""
+        client = GatewayClient(reconnect_delay=0.01)
+        client._running = True
+
+        with patch("websockets.connect", new_callable=AsyncMock) as mock_ws_connect:
+            mock_ws_connect.side_effect = [Exception("Fail"), AsyncMock()]
+
+            # This is hard to test without an infinite loop,
+            # so we'll just test one iteration of _connect failure
+            import contextlib
+
+            with contextlib.suppress(Exception):
+                await asyncio.wait_for(client._connect(), timeout=0.1)
+
+            assert client.connection_state == ConnectionState.CONNECTING
+
+    @pytest.mark.asyncio
+    async def test_connect_with_filters(self):
+        """Test connection with source filters."""
+        client = GatewayClient(filters={"dialogue": ["user"]})
+        with patch("websockets.connect", new_callable=AsyncMock) as mock_ws_connect:
+            mock_ws = AsyncMock()
+            mock_ws_connect.return_value = mock_ws
+            mock_ws.recv.return_value = json.dumps(
+                {"type": "snapshot", "state": {"connected": True}}
+            )
+
+            await client._connect()
+            # Verify filters were sent in subscription
+            sent_args = json.loads(mock_ws.send.call_args[0][0])
+            assert sent_args["filters"] == {"dialogue": ["user"]}
