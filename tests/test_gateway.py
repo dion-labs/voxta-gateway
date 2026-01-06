@@ -8,8 +8,9 @@ from voxta_gateway.state import AIState
 
 @pytest.fixture
 def gateway():
-    with patch("voxta_gateway.gateway.VoxtaBridge"), patch(
-        "voxta_gateway.gateway.WebSocketManager"
+    with (
+        patch("voxta_gateway.gateway.VoxtaBridge"),
+        patch("voxta_gateway.gateway.WebSocketManager"),
     ):
         gw = Gateway(voxta_url="http://localhost:5384")
         return gw

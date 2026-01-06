@@ -244,9 +244,10 @@ class TestGatewayClient:
         """Test client start and stop sequence."""
         client = GatewayClient(gateway_url="http://localhost:8081")
 
-        with patch("httpx.AsyncClient") as mock_http_cls, patch(
-            "websockets.connect", new_callable=AsyncMock
-        ) as mock_ws_connect:
+        with (
+            patch("httpx.AsyncClient") as mock_http_cls,
+            patch("websockets.connect", new_callable=AsyncMock) as mock_ws_connect,
+        ):
             mock_http = mock_http_cls.return_value
             mock_http.aclose = AsyncMock()
 
@@ -299,9 +300,10 @@ class TestGatewayClient:
     async def test_connect_once_success(self):
         """Test successful one-time connection."""
         client = GatewayClient()
-        with patch("httpx.AsyncClient") as mock_http_cls, patch(
-            "websockets.connect", new_callable=AsyncMock
-        ) as mock_ws_connect:
+        with (
+            patch("httpx.AsyncClient") as mock_http_cls,
+            patch("websockets.connect", new_callable=AsyncMock) as mock_ws_connect,
+        ):
             mock_http = mock_http_cls.return_value
             mock_http.aclose = AsyncMock()
 
